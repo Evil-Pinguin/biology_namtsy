@@ -62,14 +62,16 @@ ul { padding-left: 22px; }
 }
 .back:hover { border-color: var(--accent); color: var(--accent); }
 
-.tool {
+.ico-btn {
   margin-left: auto;
-  border: 1px solid var(--border); background: var(--card);
-  border-radius: var(--r-sm); padding: 9px 14px;
-  font-size: 14px; font-weight: 600; color: var(--text-2);
+  width: 40px; height: 40px; flex: 0 0 40px;
+  border: 0; border-radius: 50%; background: transparent; color: #5f6368;
+  display: grid; place-items: center;
+  transition: background .15s ease, color .15s ease;
 }
-.tool:hover { border-color: var(--border-strong); }
-.tool[aria-pressed="false"] { color: #8a9099; }
+.ico-btn:hover { background: #e8ebef; color: var(--text); }
+.ico-btn:focus-visible { outline: 3px solid var(--accent-line); outline-offset: 2px; }
+.ico-btn[aria-pressed="false"] { color: #9aa0a6; }
 
 /* ---------- заголовки экрана ---------- */
 .main { padding-top: 8px; }

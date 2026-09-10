@@ -467,14 +467,19 @@ await test('правки переживают перезагрузку стра�
    ================================================================ */
 console.log('\n[5] Мелочи');
 
-await test('звук включается и выключается понятной кнопкой', async () => {
+const ICO_ON_HTML = $('#soundBtn').innerHTML;
+
+await test('звук включается и выключается кнопкой-иконкой', async () => {
   win.App.go('home');
   await tick();
-  assert.equal($('#soundBtn').textContent, '🔊 Звук вкл');
+  assert.equal($('#soundBtn').getAttribute('aria-pressed'), 'true');
+  assert.equal($('#soundBtn').getAttribute('aria-label'), 'Звук включён');
+  assert.ok($('#soundBtn').querySelector('svg'), 'нет иконки динамика');
   click($('#soundBtn'));
   assert.equal(win.Sound.isEnabled(), false);
-  assert.equal($('#soundBtn').textContent, '🔇 Звук выкл');
   assert.equal($('#soundBtn').getAttribute('aria-pressed'), 'false');
+  assert.equal($('#soundBtn').getAttribute('aria-label'), 'Звук выключен');
+  assert.notEqual($('#soundBtn').innerHTML, ICO_ON_HTML, 'иконка не сменилась');
   click($('#soundBtn'));
   assert.equal(win.Sound.isEnabled(), true);
   assert.equal(win.localStorage.getItem('namtsy.sound'), '1');
