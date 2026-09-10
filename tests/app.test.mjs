@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
+import { IDBFactory } from 'fake-indexeddb';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let passed = 0;
@@ -119,12 +120,17 @@ await test('в справочнике есть животные, растени�
 console.log('\n[2] Интерфейс');
 
 const html = read('index.html').replace(/<script src="[^"]+"><\/script>/g, '').replace(/<link[^>]*>/g, '');
+const picsDB = new IDBFactory();          // настоящее IndexedDB-хранилище для своих картинок
+const boot = (w) => {
+  w.scrollTo = () => {};
+  w.Element.prototype.scrollTo = () => {};
+  w.Element.prototype.scrollIntoView = () => {};
+  w.indexedDB = picsDB;
+  for (const f of ['data.js', 'sound.js', 'store.js', 'pics.js', 'content.js', 'app.js']) w.eval(read('assets/js/' + f));
+  return w;
+};
 const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'dangerously', pretendToBeVisual: true });
-const win = dom.window;
-win.scrollTo = () => {};
-win.Element.prototype.scrollTo = () => {};
-win.Element.prototype.scrollIntoView = () => {};
-for (const f of ['data.js', 'sound.js', 'store.js', 'content.js', 'app.js']) win.eval(read('assets/js/' + f));
+const win = boot(dom.window);
 
 const doc = win.document;
 const $ = (s) => doc.querySelector(s);
@@ -403,7 +409,8 @@ await test('закрепление: в раунд попадают животн�
     assert.equal(q.options[q.answer], win.Content.spec(q.id.replace('pic-', '')).name,
       'правильный вариант не совпадает с названием на картинке');
     assert.ok(q.hint && q.explain, q.id + ': нет подсказки или объяснения');
-    assert.ok(fs.existsSync(path.join(ROOT, 'assets/img', q.img)));
+    assert.ok(q.img.startsWith('assets/img/'), q.id + ': рисунок не из папки assets/img');
+    assert.ok(fs.existsSync(path.join(ROOT, q.img)), 'нет файла ' + q.img);
   });
 });
 
@@ -570,9 +577,8 @@ await test('правки переживают перезагрузку стра�
   win.Content.set('q', 'r01', { text: 'Текст после перезагрузки' });
   const saved = win.localStorage.getItem('namtsy.content.v1');
   const dom2 = new JSDOM(html, { url: 'http://localhost/', runScripts: 'dangerously', pretendToBeVisual: true });
-  dom2.window.scrollTo = () => {};
   dom2.window.localStorage.setItem('namtsy.content.v1', saved);
-  for (const f of ['data.js', 'sound.js', 'store.js', 'content.js', 'app.js']) dom2.window.eval(read('assets/js/' + f));
+  boot(dom2.window);
   assert.equal(dom2.window.Content.question('r01').text, 'Текст после перезагрузки');
   assert.equal(dom2.window.document.querySelectorAll('.task-row').length, 4);
   win.Content.resetAll();
@@ -581,18 +587,159 @@ await test('правки переживают перезагрузку стра�
 await test('старые правки с удалённым разделом терминов не ломают загрузку', () => {
   const old = JSON.stringify({ q: { r01: { text: 'Из старой версии' } }, s: {}, c: { c01: { def: 'Куба' } } });
   const dom3 = new JSDOM(html, { url: 'http://localhost/', runScripts: 'dangerously', pretendToBeVisual: true });
-  dom3.window.scrollTo = () => {};
   dom3.window.localStorage.setItem('namtsy.content.v1', old);
-  for (const f of ['data.js', 'sound.js', 'store.js', 'content.js', 'app.js']) dom3.window.eval(read('assets/js/' + f));
+  boot(dom3.window);
   assert.equal(dom3.window.Content.question('r01').text, 'Из старой версии');
   assert.equal(dom3.window.Content.changedCount(), 1, 'раздел терминов посчитался как правка');
   assert.equal(dom3.window.document.querySelectorAll('.task-row').length, 4);
 });
 
 /* ================================================================
-   5. МЕЛОЧИ
+   5. СВОИ КАРТИНКИ
    ================================================================ */
-console.log('\n[5] Мелочи');
+console.log('\n[5] Свои картинки');
+
+await win.Pics.init();
+
+await test('своя картинка сохраняется в IndexedDB и подменяет рисунок из папки', async () => {
+  const id = win.DATA.SPECIES.find((s) => s.name.includes('хорь')).id;
+  const blob = new win.Blob([new Uint8Array([255, 216, 255, 217])], { type: 'image/jpeg' });
+  const url = await win.Pics.setBlob('sp:' + id, blob);
+
+  assert.equal(win.Pics.backend(), 'idb', 'IndexedDB не подключился');
+  assert.ok(url, 'адрес картинки не создан');
+  assert.equal(win.Pics.count(), 1);
+  assert.equal(win.App.picSrc(win.Content.spec(id)), url, 'приложение не взяло свою картинку');
+  assert.ok(win.App.picSrc(win.Content.spec('s01')).startsWith('assets/img/'),
+    'чужая картинка не должна меняться');
+});
+
+await test('своя картинка переживает перезагрузку страницы', async () => {
+  const id = win.DATA.SPECIES.find((s) => s.name.includes('хорь')).id;
+  const dom4 = new JSDOM(html, { url: 'http://localhost/', runScripts: 'dangerously', pretendToBeVisual: true });
+  boot(dom4.window);
+  await dom4.window.Pics.init();
+  assert.equal(dom4.window.Pics.count(), 1, 'картинка не сохранилась после перезагрузки');
+  assert.ok(dom4.window.Pics.url('sp:' + id).length > 10, 'нет адреса сохранённой картинки');
+  assert.ok(dom4.window.App.hasPic(dom4.window.Content.spec(id)));
+});
+
+await test('своя картинка показывается в знакомстве и в угадайке', async () => {
+  const id = win.DATA.SPECIES.find((s) => s.name.includes('хорь')).id;
+  const url = win.Pics.url('sp:' + id);
+
+  win.App.go('learn');
+  await tick();
+  const card = $(`.pcard[data-sp="${id}"] img`);
+  assert.equal(card.getAttribute('src'), url, 'в знакомстве осталась старая картинка');
+
+  click(card.closest('.pcard'));
+  assert.equal($('.photo').getAttribute('src'), url, 'в рассказе осталась старая картинка');
+
+  // угадайка тоже берёт свою картинку
+  let q = null;
+  for (let i = 0; i < 60 && !q; i++) {
+    win.App.startCards();
+    q = win.App.state.cards.pool.filter((x) => x.id === 'pic-' + id)[0] || null;
+  }
+  assert.ok(q, 'объект не попал в угадайку');
+  assert.equal(q.img, url, 'в угадайке не своя картинка');
+  win.App.state.cards.idx = win.App.state.cards.pool.indexOf(q);
+  win.App.go('cards');
+  await tick();
+  assert.equal($('.quiz-photo').getAttribute('src'), url, 'на экране не своя картинка');
+});
+
+await test('объект без рисунка попадает в угадайку, если загрузить свою картинку', async () => {
+  const bare = win.DATA.SPECIES.find((s) => s.name.includes('Ондатра'));
+  win.Content.set('s', bare.id, { img: '' });          // представим, что рисунка пока нет
+  await win.Pics.remove('sp:' + bare.id);
+  assert.equal(win.App.hasPic(win.Content.spec(bare.id)), false, 'объект должен остаться без картинки');
+  let missing = true;
+  for (let i = 0; i < 40 && missing; i++) {
+    win.App.startCards();
+    missing = !win.App.state.cards.pool.some((x) => x.id === 'pic-' + bare.id);
+  }
+  assert.ok(missing, 'объект без картинки не должен попадать в угадайку');
+
+  const blob = new win.Blob([new Uint8Array([255, 216, 255, 217])], { type: 'image/jpeg' });
+  await win.Pics.setBlob('sp:' + bare.id, blob);
+  assert.equal(win.App.hasPic(win.Content.spec(bare.id)), true, 'своя картинка не вернула объект в задания');
+
+  let found = false;
+  for (let i = 0; i < 80 && !found; i++) {
+    win.App.startCards();
+    found = win.App.state.cards.pool.some((x) => x.id === 'pic-' + bare.id);
+  }
+  assert.ok(found, 'объект со своей картинкой не попал в раунд');
+  win.Content.revert('s', bare.id);
+  await win.Pics.remove('sp:' + bare.id);
+});
+
+await test('файл от учителя сохраняется даже там, где его не удалось сжать', async () => {
+  const id = win.DATA.SPECIES.find((s) => s.name.toLowerCase().includes('лось')).id;
+  const file = new win.File([new Uint8Array([255, 216, 255, 217])], 'los.jpg', { type: 'image/jpeg' });
+  await win.Pics.set('sp:' + id, file);
+  assert.ok(win.Pics.url('sp:' + id), 'загруженный файл не сохранился');
+
+  let bad = null;
+  try { await win.Pics.set('sp:' + id, new win.File(['текст'], 'a.txt', { type: 'text/plain' })); }
+  catch (e) { bad = e.message; }
+  assert.ok(bad && bad.includes('не картинка'), 'обычный файл не должен приниматься: ' + bad);
+  await win.Pics.remove('sp:' + id);
+});
+
+await test('в редакторе есть загрузка, скачивание и отмена своей картинки', async () => {
+  const id = win.DATA.SPECIES.find((s) => s.name.includes('хорь')).id;
+  await win.App.go('editor');
+  await tick();
+  click($$('#edTabs .tab')[1]);
+  const box = $(`[data-item="${id}"]`);
+  assert.ok(box, 'блок вида не найден');
+  assert.ok(box.querySelector('[data-picpick]'), 'нет кнопки «Загрузить свою картинку»');
+  assert.ok(box.querySelector('[data-picfile]'), 'нет поля выбора файла');
+  assert.ok(box.querySelector('[data-picdel]'), 'нет кнопки «Убрать свою картинку»');
+  assert.ok(box.querySelector('[data-picdown]'), 'нет кнопки «Скачать картинку»');
+  assert.equal(box.querySelector('.ed-pic').getAttribute('src'), win.Pics.url('sp:' + id),
+    'в редакторе показана не та картинка');
+  assert.ok(box.querySelector('.pic-note').textContent.includes('ваша картинка'),
+    box.querySelector('.pic-note').textContent);
+
+  click(box.querySelector('[data-picdel]'));
+  await tick(); await tick();
+  assert.equal(win.Pics.has('sp:' + id), false, 'своя картинка не удалилась');
+  assert.equal($(`[data-item="${id}"] [data-picdel]`), null, 'кнопка удаления осталась');
+  assert.ok($(`[data-item="${id}"] .ed-pic`).getAttribute('src').startsWith('assets/img/'),
+    'рисунок из папки не вернулся');
+  assert.ok($(`[data-item="${id}"] .pic-note`).textContent.includes('assets/img'));
+});
+
+await test('если файл рисунка пропал, вместо него показывается эмодзи', async () => {
+  win.App.go('learn');
+  await tick();
+  const img = $('.grid-cards .pcard img');
+  const emoji = img.getAttribute('data-emoji');
+  assert.ok(emoji, 'у картинки нет запасного эмодзи');
+  img.dispatchEvent(new win.Event('error'));
+  const cell = $('.grid-cards .pcard');
+  assert.equal(cell.querySelector('img'), null, 'битая картинка осталась на экране');
+  assert.equal(cell.querySelector('.noimg').textContent, emoji);
+});
+
+await test('«Вернуть исходные тексты» не удаляет свои картинки', async () => {
+  const id = win.DATA.SPECIES[2].id;
+  await win.Pics.setBlob('sp:' + id, new win.Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' }));
+  win.Content.set('q', 'r01', { text: 'Черновик' });
+  win.Content.resetAll();
+  assert.equal(win.Content.changedCount(), 0);
+  assert.equal(win.Pics.has('sp:' + id), true, 'вместе с текстами удалилась и картинка');
+  await win.Pics.remove('sp:' + id);
+});
+
+/* ================================================================
+   6. МЕЛОЧИ
+   ================================================================ */
+console.log('\n[6] Мелочи');
 
 const ICO_ON_HTML = $('#soundBtn').innerHTML;
 

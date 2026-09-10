@@ -22,6 +22,20 @@
     editor: { tab: 'q', openId: null }
   };
 
+  const Pics = global.Pics || {
+    has() { return false; }, url() { return ''; }, count() { return 0; },
+    backend() { return 'none'; }, init() { return Promise.resolve(this); }
+  };
+  const picKey = (id) => 'sp:' + id;
+
+  /* своя картинка из браузера важнее рисунка из папки assets/img */
+  function picSrc(sp) {
+    const own = Pics.url(picKey(sp.id));
+    if (own) return own;
+    return sp.img ? 'assets/img/' + sp.img : '';
+  }
+  function hasPic(sp) { return !!picSrc(sp); }
+
   /* ---------------- утилиты ---------------- */
   function $(s, r) { return (r || document).querySelector(s); }
   function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
@@ -80,7 +94,7 @@
       const c = n(setId);
       return c + ' ' + plural(c, 'вопрос', 'вопроса', 'вопросов');
     };
-    const pics = Content.species().filter((s) => s.img).length;
+    const pics = Content.species().filter(hasPic).length;
     const tasks = [
       { r: 'learn', n: 'Животные, растения и местности', d: Content.species().length + ' карточек с рисунками' },
       { r: 'quiz/rodina', n: 'Моя Родина — Намский улус', d: words('rodina') + ' про наш край' },
@@ -148,7 +162,7 @@
   }
 
   function startCards() {
-    const withPic = Content.species().filter((s) => s.img);
+    const withPic = Content.species().filter(hasPic);
     const picked = shuffle(withPic).slice(0, Math.min(ROUND_LEN, withPic.length));
     const pool = picked.map((sp) => {
       const same = shuffle(Content.species().filter((x) => x.id !== sp.id && catOf(x) === catOf(sp)));
@@ -156,7 +170,7 @@
       const names = same.concat(rest).slice(0, 3).map((x) => x.name);
       const options = shuffle([sp.name].concat(names));
       return {
-        id: 'pic-' + sp.id, topic: sp.group, img: sp.img,
+        id: 'pic-' + sp.id, topic: sp.group, img: picSrc(sp), emoji: sp.emoji,
         text: askFor(sp), options, answer: options.indexOf(sp.name),
         hint: sp.facts[0],
         explain: sp.name + '. ' + (sp.facts[1] || sp.facts[0])
@@ -184,7 +198,7 @@
       <p class="step">Задание ${s.idx + 1} из ${total}</p>
       <div class="bar"><span style="width:${pct(s.idx, total)}%"></span></div>
 
-      ${q.img ? `<img class="quiz-photo" src="assets/img/${esc(q.img)}" alt="" loading="lazy">` : ''}
+      ${q.img ? `<img class="quiz-photo" src="${esc(q.img)}" alt="" data-emoji="${esc(q.emoji || '')}" loading="lazy">` : ''}
 
       <h2 class="q">${esc(q.text)}</h2>
       <p class="instr">${s.checked ? 'Правильный ответ найден.' : 'Выбери один ответ и нажми «Проверить».'}</p>
@@ -307,7 +321,7 @@
           <h2>Разберём ошибки</h2>
           <ul>
             ${wrong.map((r) => `<li>
-              ${r.q.img ? `<img class="mini" src="assets/img/${esc(r.q.img)}" alt="">` : esc(r.q.text)}
+              ${r.q.img ? `<img class="mini" src="${esc(r.q.img)}" alt="">` : esc(r.q.text)}
               <span class="right">Правильный ответ: ${esc(r.q.options[r.q.answer])}</span></li>`).join('')}
           </ul>
         </section>` : ''}
@@ -347,8 +361,8 @@
       <div class="grid-cards">
         ${list.map((sp) => `
           <button class="pcard" data-sp="${esc(sp.id)}" data-sfx="click">
-            ${sp.img
-              ? `<img src="assets/img/${esc(sp.img)}" alt="" loading="lazy">`
+            ${hasPic(sp)
+              ? `<img src="${esc(picSrc(sp))}" alt="" data-emoji="${esc(sp.emoji)}" loading="lazy">`
               : `<span class="noimg" aria-hidden="true">${sp.emoji}</span>`}
             <span class="nm">${esc(sp.name)}</span>
           </button>`).join('')}
@@ -373,7 +387,7 @@
     const nextSp = i >= 0 && i < list.length - 1 ? list[i + 1] : null;
 
     view.innerHTML = `
-      ${sp.img ? `<img class="photo" src="assets/img/${esc(sp.img)}" alt="${esc(sp.name)}" loading="lazy">` : ''}
+      ${hasPic(sp) ? `<img class="photo" src="${esc(picSrc(sp))}" alt="${esc(sp.name)}" data-emoji="${esc(sp.emoji)}" loading="lazy">` : ''}
       <h1 class="title">${esc(sp.name)}</h1>
       <p class="tagline">${esc(sp.status)}</p>
       <ul class="facts">${sp.facts.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
@@ -416,7 +430,7 @@
 
     view.innerHTML = `
       <h1 class="title">Задания (для учителя)</h1>
-      <p class="lead">Меняй любые слова. Правки сохраняются в этом браузере${changed ? `, изменено блоков: ${changed}` : ''}.</p>
+      <p class="lead">Меняй любые слова и картинки. Правки сохраняются в этом браузере${changed ? `, изменено блоков: ${changed}` : ''}${Pics.count() ? `, своих картинок: ${Pics.count()}` : ''}.</p>
 
       <div class="tabs" id="edTabs">
         ${ED_TABS.map((t) => `<button class="tab ${tab === t.id ? 'on' : ''}" data-tab="${t.id}" data-sfx="select">${t.title} · ${counts[t.id]}</button>`).join('')}
@@ -508,10 +522,60 @@
       }
     });
 
+    $('#edList').addEventListener('click', (e) => {
+      const pick = e.target.closest('[data-picpick]');
+      if (pick) {
+        const f = $(`[data-picfile="${pick.dataset.picpick}"]`, pick.closest('.item'));
+        if (f) f.click();
+        return;
+      }
+      const del = e.target.closest('[data-picdel]');
+      if (del) { dropPic(del.dataset.picdel); return; }
+      const down = e.target.closest('[data-picdown]');
+      if (down) { savePicFile(down.dataset.picdown); }
+    });
+
+    $('#edList').addEventListener('change', (e) => {
+      const f = e.target.closest('[data-picfile]');
+      if (f && f.files && f.files[0]) uploadPic(f.dataset.picfile, f.files[0]);
+    });
+
     if (state.editor.openId) {
       const d = $(`#edList [data-item="${state.editor.openId}"]`);
       if (d) { d.open = true; try { if (typeof d.scrollIntoView === 'function') d.scrollIntoView({ block: 'center' }); } catch (e) {} }
     }
+  }
+
+  function edPic(it) {
+    const key = picKey(it.id);
+    const own = Pics.url(key);
+    const preview = own
+      ? `<img class="ed-pic" src="${esc(own)}" alt="Своя картинка: ${esc(it.name)}">`
+      : (it.img
+        ? `<img class="ed-pic" src="assets/img/${esc(it.img)}" alt="${esc(it.name)}" data-emoji="${esc(it.emoji)}">`
+        : `<span class="ed-pic noimg" aria-hidden="true">${esc(it.emoji)}</span>`);
+    const note = own
+      ? 'Показывается ваша картинка. Она сохранена в этом браузере — на других компьютерах её не будет.'
+      : (it.img
+        ? 'Показывается рисунок из папки assets/img.'
+        : 'Картинки нет: в заданиях вместо неё эмодзи, а в угадайку этот объект не попадает.');
+
+    return `
+      <div class="field">
+        <label>Картинка</label>
+        <div class="pic-row">
+          ${preview}
+          <div class="pic-side">
+            <p class="pic-note">${esc(note)}</p>
+            <div class="btn-row">
+              <button type="button" class="btn" data-picpick="${esc(it.id)}" data-sfx="click">Загрузить свою картинку</button>
+              ${own ? `<button type="button" class="btn" data-picdown="${esc(it.id)}" data-sfx="click">Скачать картинку</button>
+                     <button type="button" class="btn" data-picdel="${esc(it.id)}" data-sfx="click">Убрать свою картинку</button>` : ''}
+            </div>
+            <input type="file" accept="image/*" data-picfile="${esc(it.id)}" hidden>
+          </div>
+        </div>
+      </div>`;
   }
 
   function edItem(tab, it) {
@@ -540,7 +604,8 @@
         <div class="field"><label>Название (его и угадывают дети)</label><input type="text" data-field="name" value="${esc(it.name)}"></div>
         <div class="field"><label>Подпись</label><input type="text" data-field="status" value="${esc(it.status)}"></div>
         <div class="field"><label>Эмодзи (показывается, если картинки нет)</label><input type="text" data-field="emoji" value="${esc(it.emoji)}"></div>
-        <div class="field"><label>Файл картинки в папке assets/img (например, s07-volk.jpg)</label>
+        ${edPic(it)}
+        <div class="field"><label>Файл рисунка в папке assets/img — он виден всем (например, s07-volk.jpg)</label>
           <input type="text" data-field="img" value="${esc(it.img || '')}"></div>
         <div class="field"><label>Что рассказать (каждая строка — отдельный пункт)</label>
           <textarea rows="4" data-field="factsText">${esc(it.facts.join('\n'))}</textarea></div>`;
@@ -595,6 +660,52 @@
   }
 
   function fail(msg) { Sound.play('wrong'); toast(msg); }
+
+  function afterPic(id) {
+    state.editor.openId = id;
+    state.cards = null;
+    renderEditor();
+  }
+
+  async function uploadPic(id, file) {
+    try {
+      await Pics.set(picKey(id), file);
+      Sound.play('correct');
+      toast('Картинка сохранена в этом браузере');
+    } catch (err) {
+      Sound.play('wrong');
+      toast(err.message || 'Не удалось загрузить картинку');
+    }
+    afterPic(id);
+  }
+
+  async function dropPic(id) {
+    try {
+      await Pics.remove(picKey(id));
+      Sound.play('toggle');
+      toast('Своя картинка убрана');
+    } catch (err) {
+      Sound.play('wrong');
+      toast('Не удалось убрать картинку');
+    }
+    afterPic(id);
+  }
+
+  async function savePicFile(id) {
+    const box = $(`#edList [data-item="${id}"]`);
+    const field = box ? $('[data-field="img"]', box) : null;
+    let name = field && field.value.trim();
+    if (!name) name = id + '.jpg';
+    if (!/\.(jpe?g|png|webp)$/i.test(name)) name += '.jpg';
+    try {
+      await Pics.download(picKey(id), name);
+      Sound.play('toggle');
+      toast('Файл ' + name + ' скачан — положите его в папку assets/img');
+    } catch (err) {
+      Sound.play('wrong');
+      toast(err.message || 'Не удалось скачать картинку');
+    }
+  }
 
   /* =========================================================
      РОУТЕР И ОБВЯЗКА
@@ -657,6 +768,22 @@
       if (on) Sound.play('toggle');
     });
 
+    /* файл рисунка мог пропасть или быть назван неправильно — показываем эмодзи */
+    document.addEventListener('error', (e) => {
+      const el = e.target;
+      if (!el || el.tagName !== 'IMG' || el.dataset.broken) return;
+      el.dataset.broken = '1';
+      const emoji = el.getAttribute('data-emoji');
+      if (emoji) {
+        const span = document.createElement('span');
+        span.className = el.classList.contains('pcard') ? 'noimg' : 'noimg inline';
+        span.textContent = emoji;
+        if (el.parentNode) el.parentNode.replaceChild(span, el);
+      } else {
+        el.style.display = 'none';
+      }
+    }, true);
+
     global.addEventListener('hashchange', () => render());
 
     document.addEventListener('keydown', (e) => {
@@ -685,6 +812,10 @@
   syncSound();
   bind();
   render();
+  Pics.init().then(() => { if (Pics.count()) render(); }).catch(() => {});
 
-  global.App = { state, render, go, startQuiz, startCards, checkAnswer, nextQuestion, toast, ROUND_LEN };
+  global.App = {
+    state, render, go, startQuiz, startCards, checkAnswer, nextQuestion,
+    toast, picSrc, hasPic, ROUND_LEN
+  };
 })(typeof window !== 'undefined' ? window : globalThis);
