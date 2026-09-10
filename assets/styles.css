@@ -201,26 +201,27 @@ h2.q { font-size: 22px; font-weight: 600; line-height: 1.4; margin-top: 24px; }
 .tab:hover { border-color: var(--border-strong); }
 .tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* ---------- простые списки (знакомство) ---------- */
-.rows { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
-.row {
-  display: flex; align-items: center; gap: 12px;
-  width: 100%; padding: 15px 16px;
+/* ---------- знакомство: сетка видов с рисунками ---------- */
+.grid-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px; margin-top: 18px;
+}
+.pcard {
   background: var(--card); border: 2px solid var(--border); border-radius: var(--r);
-  text-align: left; font-size: 18px; font-weight: 500; color: var(--text);
+  overflow: hidden; padding: 0; text-align: left;
+  display: flex; flex-direction: column;
+  transition: border-color .12s ease, box-shadow .12s ease;
 }
-.row:hover { border-color: var(--accent-line); }
-.row .pic { font-size: 22px; flex: 0 0 26px; text-align: center; }
-.row .thumb {
-  flex: 0 0 46px; width: 46px; height: 46px; border-radius: 8px;
-  object-fit: cover; background: #eef1f4;
-}
+.pcard:hover { border-color: var(--accent-line); box-shadow: 0 2px 8px rgba(31, 35, 40, .08); }
+.pcard:focus-visible { outline: 3px solid var(--accent-line); outline-offset: 2px; }
+.pcard img { width: 100%; height: 118px; object-fit: cover; display: block; background: #eef1f4; }
+.pcard .noimg { height: 118px; display: grid; place-items: center; font-size: 42px; background: #eef1f4; }
+.pcard .nm { padding: 10px 12px; font-size: 16px; font-weight: 600; }
 .photo {
   display: block; width: 100%; max-height: 320px; object-fit: cover;
   border: 2px solid var(--border); border-radius: var(--r);
   margin-top: 14px; background: #eef1f4;
 }
-.row .go { margin-left: auto; color: var(--text-2); }
 
 /* ---------- рассказ о виде ---------- */
 .facts { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; font-size: 18px; color: var(--text); padding-left: 0; list-style: none; }

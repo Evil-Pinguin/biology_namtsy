@@ -272,21 +272,23 @@ await test('знакомство: список из 22 карточек, фил�
   await tick();
   click($$('.task-row')[1]);
   await tick();
-  assert.equal($$('.row').length, win.DATA.SPECIES.length);
+  assert.equal($$('.pcard').length, win.DATA.SPECIES.length);
   assert.ok($('.lead').textContent.includes('Выбери'), 'нет инструкции');
   click($('[data-tab="flora"]'));
   const flora = win.DATA.SPECIES.filter((s) => ['trees', 'flowers'].includes(s.group)).length;
-  assert.equal($$('.row').length, flora);
+  assert.equal($$('.pcard').length, flora);
   click($('[data-tab="all"]'));
   const horek = win.DATA.SPECIES.find((s) => s.name.includes('хорь'));
   const withImg = win.DATA.SPECIES.find((x) => x.img);
-  click($(`.row[data-sp="${withImg.id}"]`));
+  click($(`.pcard[data-sp="${withImg.id}"]`));
   assert.ok($('.photo'), 'в рассказе не показалась картинка вида');
   assert.equal($('.photo').getAttribute('src'), 'assets/img/' + withImg.img);
   assert.ok($('.photo').getAttribute('alt').length > 3, 'у картинки нет подписи для чтения с экрана');
   click($('#toList'));
-  assert.ok($('.thumb'), 'в списке нет маленьких картинок');
-  click($(`.row[data-sp="${horek.id}"]`));
+  assert.ok($('.grid-cards .pcard img'), 'в списке нет картинок видов');
+  assert.ok($('.grid-cards .pcard img').getAttribute('src').startsWith('assets/img/'),
+    'превью вида указывает не в assets/img');
+  click($(`.pcard[data-sp="${horek.id}"]`));
   assert.ok($('.facts'), 'не открылся рассказ');
   assert.ok($('h1.title').textContent.includes('хор'));
   assert.ok($$('.facts li').length >= 3);
@@ -302,7 +304,7 @@ await test('кнопки «← / →» листают рассказы, «← К
   click(fwd[0]);
   assert.notEqual(win.App.state.learn.id, was, 'переход не сработал');
   click($('#toList'));
-  assert.equal($$('.row').length, win.DATA.SPECIES.length);
+  assert.equal($$('.pcard').length, win.DATA.SPECIES.length);
 });
 
 await test('закрепление: карточка переворачивается и листается', async () => {
@@ -410,7 +412,7 @@ await test('правка рассказа: строки становятся п�
   assert.equal(sp.facts.join(' | '), 'Первый факт. | Второй факт.');
   win.App.go('learn');
   await tick();
-  click($(`.row[data-sp="${id}"]`));
+  click($(`.pcard[data-sp="${id}"]`));
   assert.equal($$('.facts li').length, 2, 'знакомство не показывает правку');
 });
 

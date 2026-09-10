@@ -281,14 +281,13 @@
         ${TABS.map((t) => `<button class="tab ${state.learn.tab === t.id ? 'on' : ''}" data-tab="${t.id}" data-sfx="select">${t.title}</button>`).join('')}
       </div>
 
-      <div class="rows">
+      <div class="grid-cards">
         ${list.map((sp) => `
-          <button class="row" data-sp="${esc(sp.id)}" data-sfx="click">
+          <button class="pcard" data-sp="${esc(sp.id)}" data-sfx="click">
             ${sp.img
-              ? `<img class="thumb" src="assets/img/${esc(sp.img)}" alt="" loading="lazy">`
-              : `<span class="pic" aria-hidden="true">${sp.emoji}</span>`}
-            <span>${esc(sp.name)}</span>
-            <span class="go" aria-hidden="true">→</span>
+              ? `<img src="assets/img/${esc(sp.img)}" alt="" loading="lazy">`
+              : `<span class="noimg" aria-hidden="true">${sp.emoji}</span>`}
+            <span class="nm">${esc(sp.name)}</span>
           </button>`).join('')}
       </div>
     `;
