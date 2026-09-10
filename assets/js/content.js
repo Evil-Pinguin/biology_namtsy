@@ -50,6 +50,7 @@
     species() { return merge(global.DATA.SPECIES, ov.s); },
     cards() { return merge(global.DATA.CARDS, ov.c); },
     topics() { return global.DATA.TOPICS; },
+    sets() { return global.DATA.SETS; },
     topicById(id) { return global.DATA.topicById(id); },
 
     question(id) { return find(this.questions(), id); },
