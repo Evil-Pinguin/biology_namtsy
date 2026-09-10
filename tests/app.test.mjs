@@ -150,8 +150,11 @@ await test('стартовый экран: список заданий и нич
   assert.ok($$('.task-row').every((b) => b.dataset.go), 'у заданий нет действия');
 });
 
-await test('клик по «Моя Родина» сразу открывает первое задание', async () => {
-  click($$('.task-row')[0]);
+await test('клик по «Моя Родина» сразу открывает викторину', async () => {
+  const task = $$('.task-row').filter((b) => b.dataset.go === 'quiz/rodina')[0];
+  assert.ok(task, 'в меню нет викторины «Моя Родина»');
+  assert.equal($$('.task-row')[1], task, '«Моя Родина» должна стоять второй');
+  click(task);
   assert.equal(win.location.hash, '#/quiz/rodina');
   await tick();
   const s = win.App.state.quiz;
@@ -282,7 +285,9 @@ console.log('\n[3] Знакомство и закрепление');
 await test('знакомство: список из 26 карточек, фильтр и рассказ', async () => {
   win.App.go('home');
   await tick();
-  click($$('.task-row')[1]);
+  const task = $$('.task-row').filter((b) => b.dataset.go === 'learn')[0];
+  assert.equal($$('.task-row')[0], task, 'знакомство должно стоять первым');
+  click(task);
   await tick();
   assert.equal($$('.pcard').length, win.DATA.SPECIES.length);
   assert.ok($('.lead').textContent.includes('Выбери'), 'нет инструкции');
@@ -473,7 +478,7 @@ await test('вопрос можно перенести в другой набо�
   // на стартовом экране счётчик обновился
   win.App.go('home');
   await tick();
-  assert.ok($$('.task-row')[0].textContent.includes('11 вопросов'), $$('.task-row')[0].textContent);
+  assert.ok($$('.task-row')[1].textContent.includes('11 вопросов'), $$('.task-row')[1].textContent);
   // вернуть обратно
   await openEditor(0);
   $(`[data-item="${id}"] [data-field="set"]`).value = 'nature';

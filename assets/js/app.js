@@ -38,6 +38,15 @@
   }
   const pct = (n, t) => (t ? Math.round((n / t) * 100) : 0);
 
+  /* 1 вопрос · 2 вопроса · 5 вопросов */
+  function plural(n, one, few, many) {
+    const m10 = n % 10;
+    const m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  }
+
   function toast(msg) {
     const t = document.createElement('div');
     t.className = 'toast';
@@ -67,12 +76,16 @@
   function renderHome() {
     const qs = Content.questions();
     const n = (setId) => qs.filter((q) => q.set === setId).length;
+    const words = (setId) => {
+      const c = n(setId);
+      return c + ' ' + plural(c, 'вопрос', 'вопроса', 'вопросов');
+    };
     const pics = Content.species().filter((s) => s.img).length;
     const tasks = [
-      { r: 'quiz/rodina', n: 'Моя Родина — Намский улус', d: n('rodina') + ' вопросов про наш край' },
       { r: 'learn', n: 'Животные, растения и местности', d: Content.species().length + ' карточек с рисунками' },
+      { r: 'quiz/rodina', n: 'Моя Родина — Намский улус', d: words('rodina') + ' про наш край' },
       { r: 'cards', n: 'Закрепление: угадай по картинке', d: Math.min(ROUND_LEN, pics) + ' картинок — назови, кто или что это' },
-      { r: 'quiz/nature', n: 'Природа улуса', d: n('nature') + ' вопросов про животных и растения' }
+      { r: 'quiz/nature', n: 'Природа улуса', d: words('nature') + ' про животных и растения' }
     ];
 
     view.innerHTML = `
