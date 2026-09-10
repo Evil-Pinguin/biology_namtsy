@@ -4,74 +4,41 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Энсиэли · Биология Намского улуса</title>
-<meta name="description" content="Интерактивная образовательная викторина о флоре и фауне Намского улуса Республики Саха (Якутия) — долины Энсиэли.">
+<meta name="description" content="Знакомство с животными и растениями Намского улуса (Якутия), закрепление и викторина.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Serif:opsz,wght@8..144,400;8..144,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/styles.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E">
 </head>
 <body>
-<div class="app">
 
-  <!-- ============ SIDEBAR ============ -->
-  <aside class="sidebar" id="sidebar" aria-label="Главное меню">
-    <div class="sidebar-head">
-      <a class="brand" href="#/home" data-nav>
-        <span class="brand-spark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="url(#g1)" d="M12 2c.6 4.9 2.6 8.1 5.2 9.1-2.6 1-4.6 4.2-5.2 9.1-.6-4.9-2.6-8.1-5.2-9.1C9.4 10.1 11.4 6.9 12 2Z"/><path fill="url(#g1)" d="M19.5 14.5c.3 2.3 1.2 3.8 2.5 4.3-1.3.5-2.2 2-2.5 4.3-.3-2.3-1.2-3.8-2.5-4.3 1.3-.5 2.2-2 2.5-4.3Z" opacity=".7"/><defs><linearGradient id="g1" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stop-color="#4285f4"/><stop offset=".55" stop-color="#9b72cb"/><stop offset="1" stop-color="#d96570"/></linearGradient></defs></svg>
-        </span>
-        <span class="brand-text">
-          <b>Энсиэли</b>
-          <small>биология Намского улуса</small>
-        </span>
-      </a>
+<div class="wrap">
+  <header class="top">
+    <button class="back" id="backBtn" type="button" data-sfx="click" hidden>← Меню</button>
+    <a class="brand" href="#/home" data-sfx="click">
+      <span class="brand-spark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="url(#g1)" d="M12 2c.6 4.9 2.6 8.1 5.2 9.1-2.6 1-4.6 4.2-5.2 9.1-.6-4.9-2.6-8.1-5.2-9.1C9.4 10.1 11.4 6.9 12 2Z"/><defs><linearGradient id="g1" x1="0" y1="0" x2="24" y2="24"><stop offset="0" stop-color="#4285f4"/><stop offset=".55" stop-color="#9b72cb"/><stop offset="1" stop-color="#d96570"/></linearGradient></defs></svg>
+      </span>
+      <span>Энсиэли</span>
+    </a>
+    <div class="top-right">
+      <button class="ico" id="soundBtn" type="button" title="Звук включён" aria-label="Звук включён" data-sfx="click">🔊</button>
+      <a class="ico" id="gearBtn" href="#/editor" title="Редактировать задания" aria-label="Редактировать задания" data-sfx="click">✏️</a>
     </div>
+  </header>
 
-    <nav class="nav" id="nav"></nav>
+  <main class="content" id="view" aria-live="polite"></main>
 
-    <div class="sidebar-foot">
-      <button class="switch-row" id="soundToggle" type="button" role="switch" aria-checked="true">
-        <span class="switch-ico" aria-hidden="true">🔊</span>
-        <span class="switch-label">Звуковые эффекты</span>
-        <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-      </button>
-      <button class="switch-row" id="voiceToggle" type="button" role="switch" aria-checked="false">
-        <span class="switch-ico" aria-hidden="true">🗣️</span>
-        <span class="switch-label">Читать вслух</span>
-        <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-      </button>
-      <p class="side-note">Намский улус · Республика Саха (Якутия)</p>
-    </div>
-  </aside>
-
-  <div class="scrim" id="scrim" hidden></div>
-
-  <!-- ============ MAIN ============ -->
-  <div class="main">
-    <header class="topbar">
-      <button class="icon-btn" id="menuBtn" type="button" aria-label="Открыть меню">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z"/></svg>
-      </button>
-      <h1 class="topbar-title" id="topTitle">Главная</h1>
-      <div class="topbar-actions">
-        <span class="stat-chip" id="streakChip" title="Серия правильных ответов">🔥 <b id="streakVal">0</b></span>
-        <button class="icon-btn" id="soundBtn" type="button" aria-label="Звук включён" title="Звук включён">
-          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9H4Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4ZM14 2.2v2.1c3.4.9 5.9 4 5.9 7.7s-2.5 6.8-5.9 7.7v2.1c4.6-.9 8-5 8-9.8s-3.4-8.9-8-9.8Z"/></svg>
-        </button>
-      </div>
-    </header>
-
-    <main class="content" id="view" aria-live="polite"></main>
-  </div>
+  <footer class="foot">Намский улус · Республика Саха (Якутия)</footer>
 </div>
 
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>
-<div class="modal-root" id="modalRoot" hidden></div>
 
 <script src="assets/js/data.js"></script>
 <script src="assets/js/sound.js"></script>
 <script src="assets/js/store.js"></script>
+<script src="assets/js/content.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>

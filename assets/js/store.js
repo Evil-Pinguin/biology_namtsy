@@ -115,8 +115,16 @@
     supported() {
       return typeof global !== 'undefined' && !!global.speechSynthesis;
     },
+    /* прочитать по нажатию кнопки — работает независимо от автоозвучивания */
+    say(text) {
+      if (!this.supported() || !text) return false;
+      return this._utter(text);
+    },
     speak(text) {
       if (!this.isOn() || !this.supported() || !text) return;
+      this._utter(text);
+    },
+    _utter(text) {
       try {
         global.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
@@ -126,7 +134,8 @@
         const ru = voices.find((v) => (v.lang || '').toLowerCase().indexOf('ru') === 0);
         if (ru) u.voice = ru;
         global.speechSynthesis.speak(u);
-      } catch (e) {}
+        return true;
+      } catch (e) { return false; }
     },
     stop() {
       if (!this.supported()) return;
