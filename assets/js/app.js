@@ -7,7 +7,7 @@
   'use strict';
 
   const LETTERS = ['А', 'Б', 'В', 'Г'];
-  const QUIZ_LEN = 10;
+  const ROUND_LEN = 10;
 
   const view = document.getElementById('view');
   const backBtn = document.getElementById('backBtn');
@@ -17,8 +17,8 @@
   const state = {
     route: 'home',
     quiz: null,
-    learn: { tab: 'all', id: null },
     cards: null,
+    learn: { tab: 'all', id: null },
     editor: { tab: 'q', openId: null }
   };
 
@@ -52,22 +52,27 @@
     const parts = h.replace(/^#\/?/, '').split('/');
     return { route: parts[0] || 'home', param: parts[1] || '' };
   }
-
   function go(route, param) {
     const h = '#/' + route + (param ? '/' + param : '');
     if (global.location) global.location.hash = h;
     else render();
   }
 
+  /* текущее задание: викторина или угадайка по картинке */
+  function active() { return state.route === 'cards' ? state.cards : state.quiz; }
+
   /* =========================================================
      ЭКРАН 1 · СПИСОК ЗАДАНИЙ
      ========================================================= */
   function renderHome() {
+    const qs = Content.questions();
+    const n = (setId) => qs.filter((q) => q.set === setId).length;
+    const pics = Content.species().filter((s) => s.img).length;
     const tasks = [
-      { r: 'quiz/rodina', n: 'Моя Родина — Намский улус', d: Content.questions().filter((q) => q.set === 'rodina').length + ' вопросов' },
-      { r: 'learn', n: 'Животные и растения улуса', d: Content.species().length + ' карточек для знакомства' },
-      { r: 'cards', n: 'Закрепление: карточки', d: Content.cards().length + ' терминов' },
-      { r: 'quiz/nature', n: 'Природа улуса', d: QUIZ_LEN + ' вопросов' }
+      { r: 'quiz/rodina', n: 'Моя Родина — Намский улус', d: n('rodina') + ' вопросов про наш край' },
+      { r: 'learn', n: 'Животные, растения и местности', d: Content.species().length + ' карточек с рисунками' },
+      { r: 'cards', n: 'Закрепление: угадай по картинке', d: Math.min(ROUND_LEN, pics) + ' картинок — назови, кто или что это' },
+      { r: 'quiz/nature', n: 'Природа улуса', d: n('nature') + ' вопросов про животных и растения' }
     ];
 
     view.innerHTML = `
@@ -91,18 +96,22 @@
   }
 
   /* =========================================================
-     ЭКРАН 2 · ВИКТОРИНА
+     ЭКРАН 2 · ВИКТОРИНА (ВОПРОС ТЕКСТОМ)
      ========================================================= */
+  function newSession(extra) {
+    return Object.assign({
+      idx: 0, picked: null, checked: false, firstTry: true,
+      correctFirst: 0, dead: [], hint: false, log: [], done: false, startedAt: Date.now()
+    }, extra);
+  }
+
   function startQuiz(setId) {
     const set = Content.sets().filter((s) => s.id === setId)[0] || Content.sets()[0];
     const all = Content.questions().filter((q) => q.set === set.id);
-    const pool = shuffle(all).slice(0, Math.min(QUIZ_LEN, all.length));
-    state.quiz = {
-      set: set.id, title: set.title,
-      pool, idx: 0, picked: null, checked: false,
-      firstTry: true, correctFirst: 0, dead: [],
-      hint: false, log: [], done: false, startedAt: Date.now()
-    };
+    state.quiz = newSession({
+      type: 'quiz', set: set.id, title: set.title,
+      pool: shuffle(all).slice(0, Math.min(ROUND_LEN, all.length))
+    });
   }
 
   function renderQuiz(setId) {
@@ -112,16 +121,57 @@
     renderQuestion();
   }
 
+  /* =========================================================
+     ЭКРАН 3 · ЗАКРЕПЛЕНИЕ (УГАДАЙ ПО КАРТИНКЕ)
+     ========================================================= */
+  const catOf = (sp) => (sp.group === 'trees' || sp.group === 'flowers' ? 'flora'
+    : sp.group === 'places' ? 'places' : 'fauna');
+
+  function askFor(sp) {
+    const c = catOf(sp);
+    if (c === 'flora') return 'Как называется это растение?';
+    if (c === 'places') return 'Как называется это место?';
+    return 'Как называется это животное?';
+  }
+
+  function startCards() {
+    const withPic = Content.species().filter((s) => s.img);
+    const picked = shuffle(withPic).slice(0, Math.min(ROUND_LEN, withPic.length));
+    const pool = picked.map((sp) => {
+      const same = shuffle(Content.species().filter((x) => x.id !== sp.id && catOf(x) === catOf(sp)));
+      const rest = shuffle(Content.species().filter((x) => x.id !== sp.id && catOf(x) !== catOf(sp)));
+      const names = same.concat(rest).slice(0, 3).map((x) => x.name);
+      const options = shuffle([sp.name].concat(names));
+      return {
+        id: 'pic-' + sp.id, topic: sp.group, img: sp.img,
+        text: askFor(sp), options, answer: options.indexOf(sp.name),
+        hint: sp.facts[0],
+        explain: sp.name + '. ' + (sp.facts[1] || sp.facts[0])
+      };
+    });
+    state.cards = newSession({ type: 'cards', title: 'Закрепление', pool });
+  }
+
+  function renderCards() {
+    if (!state.cards || !state.cards.pool.length) startCards();
+    if (state.cards.done) return renderResult();
+    renderQuestion();
+  }
+
+  /* =========================================================
+     ОБЩИЙ ЭКРАН ЗАДАНИЯ
+     ========================================================= */
   function renderQuestion() {
-    const s = state.quiz;
+    const s = active();
     const q = s.pool[s.idx];
     const total = s.pool.length;
-    const answeredOk = s.correctFirst;
 
     view.innerHTML = `
       <h1 class="title">${esc(s.title)}</h1>
       <p class="step">Задание ${s.idx + 1} из ${total}</p>
       <div class="bar"><span style="width:${pct(s.idx, total)}%"></span></div>
+
+      ${q.img ? `<img class="quiz-photo" src="assets/img/${esc(q.img)}" alt="" loading="lazy">` : ''}
 
       <h2 class="q">${esc(q.text)}</h2>
       <p class="instr">${s.checked ? 'Правильный ответ найден.' : 'Выбери один ответ и нажми «Проверить».'}</p>
@@ -139,8 +189,7 @@
                      ${dead || s.checked ? 'disabled' : ''} aria-pressed="${s.picked === i && !dead}">
               <span class="dot" aria-hidden="true"></span>
               <span class="txt">${esc(o)}</span>
-              ${mark}
-              ${label ? `<span class="sr">${label}</span>` : ''}
+              ${mark}${label ? `<span class="sr">${label}</span>` : ''}
             </button>`;
         }).join('')}
       </div>
@@ -173,21 +222,18 @@
 
     const check = $('#checkBtn');
     if (check) check.addEventListener('click', () => checkAnswer());
-
     const hint = $('#hintBtn');
     if (hint) hint.addEventListener('click', () => { s.hint = true; Sound.play('hint'); renderQuestion(); });
-
     const next = $('#nextBtn');
     if (next) next.addEventListener('click', nextQuestion);
   }
 
   function checkAnswer() {
-    const s = state.quiz;
+    const s = active();
     if (!s || s.checked || s.picked === null) return;
     const q = s.pool[s.idx];
-    const ok = s.picked === q.answer;
 
-    if (ok) {
+    if (s.picked === q.answer) {
       s.checked = true;
       if (s.firstTry) s.correctFirst += 1;
       Sound.play('correct');
@@ -204,7 +250,7 @@
   }
 
   function nextQuestion() {
-    const s = state.quiz;
+    const s = active();
     if (!s) return;
     s.idx += 1;
     s.picked = null;
@@ -218,11 +264,11 @@
       Store.recordRound(p, false, s.correctFirst);
       Sound.play(p >= 70 ? 'win' : 'lose');
     }
-    renderQuiz(s.set);
+    if (s.type === 'cards') renderCards(); else renderQuiz(s.set);
   }
 
   function renderResult() {
-    const s = state.quiz;
+    const s = active();
     const total = s.pool.length;
     const good = s.correctFirst;
     const p = pct(good, total);
@@ -247,24 +293,28 @@
         <section class="mistakes">
           <h2>Разберём ошибки</h2>
           <ul>
-            ${wrong.map((r) => `<li>${esc(r.q.text)}
+            ${wrong.map((r) => `<li>
+              ${r.q.img ? `<img class="mini" src="assets/img/${esc(r.q.img)}" alt="">` : esc(r.q.text)}
               <span class="right">Правильный ответ: ${esc(r.q.options[r.q.answer])}</span></li>`).join('')}
           </ul>
         </section>` : ''}
     `;
 
-    $('#againBtn').addEventListener('click', () => { Sound.play('click'); startQuiz(s.set); renderQuiz(s.set); });
+    $('#againBtn').addEventListener('click', () => {
+      Sound.play('click');
+      if (s.type === 'cards') { startCards(); renderCards(); } else { startQuiz(s.set); renderQuiz(s.set); }
+    });
   }
 
   /* =========================================================
-     ЭКРАН 3 · ЗНАКОМСТВО
+     ЭКРАН 4 · ЗНАКОМСТВО
      ========================================================= */
   const TABS = [
     { id: 'all', title: 'Все' },
     { id: 'fauna', title: 'Животные' },
-    { id: 'flora', title: 'Растения' }
+    { id: 'flora', title: 'Растения' },
+    { id: 'places', title: 'Местности' }
   ];
-  const catOf = (sp) => ((sp.group === 'trees' || sp.group === 'flowers') ? 'flora' : 'fauna');
 
   function learnList() {
     return Content.species().filter((sp) => state.learn.tab === 'all' || catOf(sp) === state.learn.tab);
@@ -274,7 +324,7 @@
     if (state.learn.id) return renderLearnOne();
     const list = learnList();
     view.innerHTML = `
-      <h1 class="title">Животные и растения улуса</h1>
+      <h1 class="title">Животные, растения и местности</h1>
       <p class="lead">Выбери, о ком или о чём хочешь узнать.</p>
 
       <div class="tabs" role="group" aria-label="Фильтр">
@@ -335,85 +385,20 @@
   }
 
   /* =========================================================
-     ЭКРАН 4 · ЗАКРЕПЛЕНИЕ (КАРТОЧКИ)
-     ========================================================= */
-  function initCards() {
-    state.cards = { deck: shuffle(Content.cards()), idx: 0, over: false };
-  }
-
-  function renderCards() {
-    if (!state.cards) initCards();
-    const c = state.cards;
-    if (!c.deck.length) {
-      view.innerHTML = '<h1 class="title">Карточек пока нет</h1><p class="lead">Их можно добавить в разделе «Для учителя».</p>';
-      return;
-    }
-    if (c.idx >= c.deck.length) c.idx = 0;
-    const card = c.deck[c.idx];
-    const last = c.idx === c.deck.length - 1;
-
-    view.innerHTML = `
-      <h1 class="title">Закрепление</h1>
-      <p class="step">Карточка ${c.idx + 1} из ${c.deck.length}</p>
-      <div class="bar"><span style="width:${pct(c.idx + 1, c.deck.length)}%"></span></div>
-      <p class="instr">Вспомни, что это значит, и нажми на карточку.</p>
-
-      <div class="card-box">
-        <div class="flip ${c.over ? 'over' : ''}" id="flip" role="button" tabindex="0"
-             aria-label="Карточка. Нажми, чтобы увидеть ответ.">
-          <div class="side a">
-            <span class="small">${esc(card.tag)}</span>
-            <span class="word">${esc(card.term)}</span>
-          </div>
-          <div class="side b">
-            <span class="def">${esc(card.def)}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button class="btn primary" id="flipBtn" data-sfx="flip">${c.over ? 'Скрыть ответ' : 'Показать ответ'}</button>
-        <div class="btn-row">
-          <button class="btn" id="prevBtn" data-sfx="flip">← Назад</button>
-          <button class="btn" id="nextBtn" data-sfx="flip">${last ? 'В начало' : 'Дальше →'}</button>
-        </div>
-      </div>
-    `;
-
-    const flip = () => { c.over = !c.over; Sound.play('flip'); renderCards(); };
-    const move = (d) => {
-      c.idx = (c.idx + d + c.deck.length) % c.deck.length;
-      c.over = false;
-      Sound.play('flip');
-      renderCards();
-    };
-
-    $('#flip').addEventListener('click', flip);
-    $('#flip').addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); } });
-    $('#flipBtn').addEventListener('click', flip);
-    $('#prevBtn').addEventListener('click', () => move(-1));
-    $('#nextBtn').addEventListener('click', () => move(1));
-  }
-
-  /* =========================================================
      ЭКРАН 5 · РЕДАКТОР (ДЛЯ УЧИТЕЛЯ)
      ========================================================= */
   const ED_TABS = [
     { id: 'q', title: 'Вопросы' },
-    { id: 's', title: 'Карточки знакомства' },
-    { id: 'c', title: 'Термины' }
+    { id: 's', title: 'Рисунки и рассказы' }
   ];
 
   function edItems() {
-    const t = state.editor.tab;
-    if (t === 's') return Content.species();
-    if (t === 'c') return Content.cards();
-    return Content.questions();
+    return state.editor.tab === 's' ? Content.species() : Content.questions();
   }
 
   function renderEditor() {
     const tab = state.editor.tab;
-    const counts = { q: Content.questions().length, s: Content.species().length, c: Content.cards().length };
+    const counts = { q: Content.questions().length, s: Content.species().length };
     const changed = Content.changedCount();
 
     view.innerHTML = `
@@ -518,15 +503,10 @@
 
   function edItem(tab, it) {
     const ch = Content.changed(tab, it.id);
-    const sum = tab === 'q'
-      ? `${esc(it.text.length > 70 ? it.text.slice(0, 70) + '…' : it.text)}`
-      : tab === 's' ? `${esc(it.name)}` : `${esc(it.term)}`;
-    const tag = tab === 'q'
-      ? `<span class="sum-tag">${it.set === 'rodina' ? 'Родина' : 'Природа'}</span>` : '';
+    const sum = tab === 'q' ? esc(it.text.length > 70 ? it.text.slice(0, 70) + '…' : it.text) : esc(it.name);
+    const tag = tab === 'q' ? `<span class="sum-tag">${it.set === 'rodina' ? 'Родина' : 'Природа'}</span>` : '';
 
-    let body = '';
-    if (tab === 'q') {
-      body = `
+    const body = tab === 'q' ? `
         <div class="field"><label>Текст вопроса</label>
           <textarea rows="2" data-field="text">${esc(it.text)}</textarea></div>
         <div class="field"><label>Набор заданий</label>
@@ -542,22 +522,15 @@
               </div>`).join('')}
           </div></div>
         <div class="field"><label>Подсказка</label><textarea rows="2" data-field="hint">${esc(it.hint)}</textarea></div>
-        <div class="field"><label>Объяснение правильного ответа</label><textarea rows="3" data-field="explain">${esc(it.explain)}</textarea></div>`;
-    } else if (tab === 's') {
-      body = `
-        <div class="field"><label>Название</label><input type="text" data-field="name" value="${esc(it.name)}"></div>
+        <div class="field"><label>Объяснение правильного ответа</label><textarea rows="3" data-field="explain">${esc(it.explain)}</textarea></div>`
+      : `
+        <div class="field"><label>Название (его и угадывают дети)</label><input type="text" data-field="name" value="${esc(it.name)}"></div>
         <div class="field"><label>Подпись</label><input type="text" data-field="status" value="${esc(it.status)}"></div>
         <div class="field"><label>Эмодзи (показывается, если картинки нет)</label><input type="text" data-field="emoji" value="${esc(it.emoji)}"></div>
         <div class="field"><label>Файл картинки в папке assets/img (например, s07-volk.jpg)</label>
           <input type="text" data-field="img" value="${esc(it.img || '')}"></div>
         <div class="field"><label>Что рассказать (каждая строка — отдельный пункт)</label>
           <textarea rows="4" data-field="factsText">${esc(it.facts.join('\n'))}</textarea></div>`;
-    } else {
-      body = `
-        <div class="field"><label>Термин</label><input type="text" data-field="term" value="${esc(it.term)}"></div>
-        <div class="field"><label>Определение</label><textarea rows="3" data-field="def">${esc(it.def)}</textarea></div>
-        <div class="field"><label>Метка</label><input type="text" data-field="tag" value="${esc(it.tag)}"></div>`;
-    }
 
     return `
       <details class="item" data-item="${esc(it.id)}" ${state.editor.openId === it.id ? 'open' : ''}>
@@ -581,7 +554,6 @@
       const text = val('text');
       const hint = val('hint');
       const explain = val('explain');
-      const set = val('set');
       const options = $$('[data-opt]', box).map((i) => i.value.trim());
       const answer = parseInt($('[data-answer]', box).dataset.answer, 10);
       if (!text) return fail('Текст вопроса не может быть пустым');
@@ -589,8 +561,8 @@
       if (new Set(options.map((o) => o.toLowerCase())).size !== 4) return fail('Варианты ответа не должны повторяться');
       if (!(answer >= 0 && answer <= 3)) return fail('Отметь правильный вариант');
       if (!hint || !explain) return fail('Подсказка и объяснение не могут быть пустыми');
-      Content.set('q', id, { text, options, answer, hint, explain, set });
-    } else if (state.editor.tab === 's') {
+      Content.set('q', id, { text, options, answer, hint, explain, set: val('set') });
+    } else {
       const name = val('name');
       const facts = val('factsText').split('\n').map((x) => x.trim()).filter(Boolean);
       if (!name) return fail('Название не может быть пустым');
@@ -599,11 +571,6 @@
       const img = val('img');
       if (img) patch.img = img;
       Content.set('s', id, patch);
-    } else {
-      const term = val('term');
-      const def = val('def');
-      if (!term || !def) return fail('Термин и определение не могут быть пустыми');
-      Content.set('c', id, { term, def, tag: val('tag') || 'Термин' });
     }
 
     state.editor.openId = id;
@@ -634,7 +601,7 @@
     else if (route === 'learn') renderLearn();
     else if (route === 'cards') renderCards();
     else if (route === 'editor') renderEditor();
-    else { state.quiz = null; renderHome(); }
+    else { state.quiz = null; state.cards = null; renderHome(); }
 
     try { global.scrollTo(0, 0); } catch (e) {}
   }
@@ -685,17 +652,8 @@
 
       if (e.key === 'Escape') { if (state.route !== 'home') go('home'); return; }
 
-      if (state.route === 'cards' && state.cards) {
-        const c = state.cards;
-        const n = c.deck.length;
-        if (e.key === ' ') { e.preventDefault(); c.over = !c.over; Sound.play('flip'); renderCards(); }
-        else if (e.key === 'ArrowRight') { c.idx = (c.idx + 1) % n; c.over = false; Sound.play('flip'); renderCards(); }
-        else if (e.key === 'ArrowLeft') { c.idx = (c.idx - 1 + n) % n; c.over = false; Sound.play('flip'); renderCards(); }
-        return;
-      }
-
-      if (state.route === 'quiz' && state.quiz && !state.quiz.done) {
-        const s = state.quiz;
+      const s = active();
+      if ((state.route === 'quiz' || state.route === 'cards') && s && !s.done) {
         if (!s.checked) {
           const n = parseInt(e.key, 10);
           const idx = !isNaN(n) && n >= 1 && n <= 4 ? n - 1 : LETTERS.indexOf(e.key.toUpperCase());
@@ -705,9 +663,7 @@
             renderQuestion();
           } else if (e.key.toLowerCase() === 'h' || e.key.toLowerCase() === 'р') {
             s.hint = true; Sound.play('hint'); renderQuestion();
-          } else if (e.key === 'Enter' && s.picked !== null) {
-            checkAnswer();
-          }
+          } else if (e.key === 'Enter' && s.picked !== null) checkAnswer();
         } else if (e.key === 'Enter') nextQuestion();
       }
     });
@@ -717,5 +673,5 @@
   bind();
   render();
 
-  global.App = { state, render, go, startQuiz, checkAnswer, nextQuestion, toast, QUIZ_LEN };
+  global.App = { state, render, go, startQuiz, startCards, checkAnswer, nextQuestion, toast, ROUND_LEN };
 })(typeof window !== 'undefined' ? window : globalThis);

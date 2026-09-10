@@ -93,12 +93,24 @@ await test('у готовых видов есть файлы картинок, �
   D.SPECIES.forEach((x) => assert.ok(x.emoji, `${x.id}: нет эмодзи-запасного варианта`));
 });
 
-await test('карточки и виды на месте, id уникальны', () => {
-  assert.equal(D.CARDS.length, 20);
-  assert.equal(new Set(D.CARDS.map((c) => c.id)).size, 20);
-  assert.equal(D.SPECIES.length, 22);
-  assert.equal(new Set(D.SPECIES.map((s) => s.id)).size, 22);
-  D.SPECIES.forEach((s) => assert.ok(s.facts.length >= 3, `${s.name}: мало фактов`));
+await test('справочник: 26 видов, id уникальны, у каждого картинка и рассказ', () => {
+  assert.equal(D.CARDS, undefined, 'термины-карточки должны быть удалены');
+  assert.equal(D.SPECIES.length, 26);
+  assert.equal(new Set(D.SPECIES.map((s) => s.id)).size, 26);
+  D.SPECIES.forEach((s) => {
+    assert.ok(s.facts.length >= 3, `${s.name}: мало фактов`);
+    assert.ok(s.img, `${s.id}: нет картинки — её не угадать`);
+    assert.ok(fs.existsSync(path.join(ROOT, 'assets/img', s.img)), `нет файла ${s.img}`);
+  });
+});
+
+await test('в справочнике есть животные, растения и местности', () => {
+  const groups = D.GROUPS.map((g) => g.id);
+  for (const g of ['birds', 'mammals', 'farm', 'trees', 'flowers', 'places']) {
+    assert.ok(groups.includes(g), 'в GROUPS нет группы ' + g);
+    const n = D.SPECIES.filter((s) => s.group === g).length;
+    assert.ok(n >= 2, `в группе ${g} всего ${n} записей`);
+  }
 });
 
 /* ================================================================
@@ -267,7 +279,7 @@ await test('второй набор «Природа улуса» берёт с�
    ================================================================ */
 console.log('\n[3] Знакомство и закрепление');
 
-await test('знакомство: список из 22 карточек, фильтр и рассказ', async () => {
+await test('знакомство: список из 26 карточек, фильтр и рассказ', async () => {
   win.App.go('home');
   await tick();
   click($$('.task-row')[1]);
@@ -277,6 +289,10 @@ await test('знакомство: список из 22 карточек, фил�
   click($('[data-tab="flora"]'));
   const flora = win.DATA.SPECIES.filter((s) => ['trees', 'flowers'].includes(s.group)).length;
   assert.equal($$('.pcard').length, flora);
+  click($('[data-tab="places"]'));
+  const places = win.DATA.SPECIES.filter((s) => s.group === 'places').length;
+  assert.equal($$('.pcard').length, places, 'вкладке «Местности» нечего показать');
+  assert.ok($$('.tab').some((t) => t.textContent.trim() === 'Местности'), 'нет вкладки «Местности»');
   click($('[data-tab="all"]'));
   const horek = win.DATA.SPECIES.find((s) => s.name.includes('хорь'));
   const withImg = win.DATA.SPECIES.find((x) => x.img);
@@ -307,26 +323,113 @@ await test('кнопки «← / →» листают рассказы, «← К
   assert.equal($$('.pcard').length, win.DATA.SPECIES.length);
 });
 
-await test('закрепление: карточка переворачивается и листается', async () => {
+await test('закрепление: вместо слов — картинка, внизу четыре названия', async () => {
   win.App.go('home');
   await tick();
-  click($$('.task-row')[2]);
+  const task = $$('.task-row')[2];
+  assert.ok(task.textContent.includes('Закрепление'));
+  assert.ok(task.dataset.go === 'cards');
+  click(task);
   await tick();
-  assert.ok($('#flip'), 'нет карточки');
-  assert.ok($('.step').textContent.includes('Карточка 1 из 20'));
-  assert.equal($('.flip').classList.contains('over'), false);
-  assert.ok($('#flipBtn').textContent.includes('Показать ответ'));
-  click($('#flipBtn'));
-  assert.ok($('.flip').classList.contains('over'), 'карточка не перевернулась');
-  assert.ok($('#flipBtn').textContent.includes('Скрыть ответ'));
-  const word = $('.side.a .word').textContent;
+  const s = win.App.state.cards;
+  assert.ok(s, 'раунд не начался');
+  assert.equal($('.title').textContent, 'Закрепление');
+  assert.ok($('.step').textContent.includes('Задание 1 из 10'), $('.step').textContent);
+  assert.equal(s.pool.length, 10, 'картинок в раунде: ' + s.pool.length);
+
+  const img = $('.quiz-photo');
+  assert.ok(img, 'нет большой картинки');
+  assert.ok(img.getAttribute('src').startsWith('assets/img/'), 'картинка не из assets/img');
+  assert.ok(fs.existsSync(path.join(ROOT, img.getAttribute('src'))), 'файл картинки не найден');
+  assert.equal(img.getAttribute('alt'), '', 'подпись картинки подсказывает ответ');
+  assert.ok($('h2.q').textContent.includes('Как называется'), $('h2.q').textContent);
+  assert.ok($('.instr').textContent.includes('Выбери один ответ'), 'нет инструкции');
+
+  const names = $$('.answer .txt').map((n) => n.textContent);
+  assert.equal(names.length, 4, 'вариантов: ' + names.length);
+  assert.equal(new Set(names).size, 4, 'варианты повторяются');
+  assert.ok(mainButtons().length <= 6, `слишком много кнопок: ${mainButtons().length}`);
+  assert.ok($('#checkBtn'), 'нет кнопки «Проверить»');
+  assert.ok($('#hintBtn'), 'нет ссылки «Нужна подсказка»');
+});
+
+await test('закрепление: ошибка, подсказка и верный ответ работают как в викторине', () => {
+  const s = win.App.state.cards;
+  const q = s.pool[0];
+  const wrong = [0, 1, 2, 3].find((i) => i !== q.answer);
+
+  click($('#hintBtn'));
+  assert.ok($('#feedback .msg.hint'), 'подсказка не появилась');
+
+  click($(`.answer[data-i="${wrong}"]`));
+  click($('#checkBtn'));
+  assert.ok($('#feedback .msg.no'), 'нет сообщения об ошибке');
+  assert.ok($('#feedback .msg.no').textContent.includes('Попробуй'), 'ошибка не объяснена словами');
+  assert.ok($(`.answer[data-i="${wrong}"]`).classList.contains('no'));
+  assert.equal(s.firstTry, false);
+
+  click($(`.answer[data-i="${q.answer}"]`));
+  click($('#checkBtn'));
+  assert.ok($('#feedback .msg.ok'), 'нет сообщения «Правильно»');
+  assert.equal(s.correctFirst, 0, 'со второй попытки не должно засчитываться');
   click($('#nextBtn'));
-  assert.equal($('.flip').classList.contains('over'), false, 'переворот не сбросился');
-  click($('#prevBtn'));
-  assert.equal($('.side.a .word').textContent, word);
-  key(' ');
-  assert.ok($('.flip').classList.contains('over'), 'пробел не переворачивает карточку');
-  assert.ok(mainButtons().length <= 4, `слишком много кнопок: ${mainButtons().length}`);
+  assert.ok($('.quiz-photo'), 'на втором задании нет картинки');
+  assert.ok($('.step').textContent.includes('Задание 2 из 10'));
+});
+
+await test('закрепление: в раунд попадают животные, растения и местности', () => {
+  const seen = new Set();
+  const asks = new Set();
+  for (let i = 0; i < 40; i++) {
+    win.App.startCards();
+    win.App.state.cards.pool.forEach((q) => { seen.add(q.topic); asks.add(q.text); });
+  }
+  for (const g of ['birds', 'mammals', 'farm', 'trees', 'flowers', 'places']) {
+    assert.ok(seen.has(g), 'в угадайке не встретилась группа ' + g);
+  }
+  assert.ok(asks.has('Как называется это животное?'), 'нет вопроса про животное');
+  assert.ok(asks.has('Как называется это растение?'), 'нет вопроса про растение');
+  assert.ok(asks.has('Как называется это место?'), 'нет вопроса про местность');
+
+  const names = new Set(win.DATA.SPECIES.map((s) => s.name));
+  win.App.state.cards.pool.forEach((q) => {
+    assert.equal(new Set(q.options).size, 4, q.id + ': дубли названий');
+    q.options.forEach((o) => assert.ok(names.has(o), 'неизвестное название: ' + o));
+    assert.equal(q.options[q.answer], win.Content.spec(q.id.replace('pic-', '')).name,
+      'правильный вариант не совпадает с названием на картинке');
+    assert.ok(q.hint && q.explain, q.id + ': нет подсказки или объяснения');
+    assert.ok(fs.existsSync(path.join(ROOT, 'assets/img', q.img)));
+  });
+});
+
+await test('закрепление доходит до результата и начинается заново', () => {
+  win.App.startCards();
+  win.App.render();
+  assert.ok($('.quiz-photo'), 'раунд не перерисовался');
+  const s = win.App.state.cards;
+  for (let i = s.idx; i < s.pool.length; i++) {
+    const q = win.App.state.cards.pool[i];
+    click($(`.answer[data-i="${q.answer}"]`));
+    click($('#checkBtn'));
+    click($('#nextBtn'));
+  }
+  assert.equal(win.App.state.cards.done, true);
+  assert.ok($('.result-score'), 'нет счёта');
+  assert.equal($$('.btn').length, 2, 'на результате должно быть две кнопки');
+  click($('#againBtn'));
+  assert.equal(win.App.state.cards.idx, 0);
+  assert.equal(win.App.state.cards.done, false);
+  assert.ok($('.quiz-photo'), 'после повтора нет картинки');
+});
+
+await test('старые карточки-перевёртыши удалены', () => {
+  win.App.go('cards');
+  assert.equal($('#flip'), null, 'осталась переворачивающаяся карточка');
+  assert.equal($('.side'), null);
+  assert.equal($('#flipBtn'), null);
+  assert.equal($('#prevBtn'), null);
+  assert.equal(win.Content.cards, undefined, 'в Content остался раздел терминов');
+  assert.ok(!read('assets/js/data.js').includes('CARDS'), 'в data.js остался CARDS');
 });
 
 /* ================================================================
@@ -336,14 +439,19 @@ console.log('\n[4] Редактор заданий');
 
 const openEditor = async (tab) => { win.App.go('editor'); await tick(); if (tab != null) click($$('#edTabs .tab')[tab]); };
 
-await test('в редакторе три вкладки и все 33 вопроса', async () => {
+await test('в редакторе две вкладки и все 33 вопроса', async () => {
   await openEditor(0);
-  assert.equal($$('#edTabs .tab').length, 3);
+  assert.equal($$('#edTabs .tab').length, 2, 'вкладка «Термины» должна уйти вместе с карточками');
   assert.ok($('#edTabs .tab').textContent.includes('Вопросы · 33'));
   assert.equal($$('.item').length, 33);
+  click($$('#edTabs .tab')[1]);
+  assert.ok($('#edTabs .tab.on').textContent.includes('Рисунки'));
+  assert.equal($$('.item').length, 26);
+  assert.ok($('[data-field="img"]'), 'нет поля для файла картинки');
 });
 
-await test('можно поменять слова в вопросе — правка сразу в викторине', () => {
+await test('можно поменять слова в вопросе — правка сразу в викторине', async () => {
+  await openEditor(0);
   const id = 'r03';
   const newText = 'Как называется село, в котором живёт администрация Намского улуса?';
   $(`[data-item="${id}"] [data-field="text"]`).value = newText;
@@ -416,26 +524,27 @@ await test('правка рассказа: строки становятся п�
   assert.equal($$('.facts li').length, 2, 'знакомство не показывает правку');
 });
 
-await test('правка термина меняет текст в закреплении', async () => {
-  await openEditor(2);
-  const id = win.DATA.CARDS[0].id;
-  $(`[data-item="${id}"] [data-field="def"]`).value = 'Обновлённое определение.';
-  click($(`[data-item="${id}"] [data-save]`));
-  assert.equal(win.Content.card(id).def, 'Обновлённое определение.');
-  win.App.go('cards');
-  await tick();
-  assert.ok(win.App.state.cards.deck.some((c) => c.id === id && c.def === 'Обновлённое определение.'),
-    'карточка не обновилась');
+await test('правка названия меняет вариант ответа в угадайке', () => {
+  const id = win.DATA.SPECIES[0].id;
+  win.Content.set('s', id, { name: 'Лебедь-кликун (Куба)' });
+  let q = null;
+  for (let i = 0; i < 60 && !q; i++) {
+    win.App.startCards();
+    q = win.App.state.cards.pool.filter((x) => x.id === 'pic-' + id)[0] || null;
+  }
+  assert.ok(q, 'вид не попал в раунд');
+  assert.equal(q.options[q.answer], 'Лебедь-кликун (Куба)', 'правка не дошла до угадайки');
+  win.Content.revert('s', id);
 });
 
 await test('экспорт, импорт и отмена правок', async () => {
   const json = win.Content.exportJSON();
   const parsed = JSON.parse(json);
-  assert.equal(Object.keys(parsed.q).length, 2, 'ожидались 2 правки вопросов (текст и верный вариант)');
+  assert.equal(Object.keys(parsed.q).join(','), 'r03,r04', 'лишние или пропавшие правки вопросов');
   win.Content.resetAll();
   assert.equal(win.Content.changedCount(), 0);
   const n = win.Content.importJSON(json);
-  assert.equal(n, 4, 'импорт вернул не все правки (2 вопроса + вид + термин)');
+  assert.equal(n, 3, 'импорт вернул не все правки (2 вопроса + вид)');
   assert.equal(win.Content.question('r03').text, 'Как называется село, в котором живёт администрация Намского улуса?');
 
   await openEditor(0);
@@ -462,6 +571,17 @@ await test('правки переживают перезагрузку стра�
   assert.equal(dom2.window.Content.question('r01').text, 'Текст после перезагрузки');
   assert.equal(dom2.window.document.querySelectorAll('.task-row').length, 4);
   win.Content.resetAll();
+});
+
+await test('старые правки с удалённым разделом терминов не ломают загрузку', () => {
+  const old = JSON.stringify({ q: { r01: { text: 'Из старой версии' } }, s: {}, c: { c01: { def: 'Куба' } } });
+  const dom3 = new JSDOM(html, { url: 'http://localhost/', runScripts: 'dangerously', pretendToBeVisual: true });
+  dom3.window.scrollTo = () => {};
+  dom3.window.localStorage.setItem('namtsy.content.v1', old);
+  for (const f of ['data.js', 'sound.js', 'store.js', 'content.js', 'app.js']) dom3.window.eval(read('assets/js/' + f));
+  assert.equal(dom3.window.Content.question('r01').text, 'Из старой версии');
+  assert.equal(dom3.window.Content.changedCount(), 1, 'раздел терминов посчитался как правка');
+  assert.equal(dom3.window.document.querySelectorAll('.task-row').length, 4);
 });
 
 /* ================================================================

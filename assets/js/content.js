@@ -8,20 +8,30 @@
   'use strict';
 
   const KEY = 'namtsy.content.v1';
-  const EMPTY = { q: {}, s: {}, c: {} };
+  /* q — вопросы, s — справочник (картинки и рассказы) */
+  const KINDS = { q: 'QUESTIONS', s: 'SPECIES' };
+  const KIND_KEYS = Object.keys(KINDS);
+
+  function blank() {
+    const o = {};
+    KIND_KEYS.forEach((k) => { o[k] = {}; });
+    return o;
+  }
+  const EMPTY = blank();
 
   function read() {
     try {
       const raw = global.localStorage ? global.localStorage.getItem(KEY) : null;
       if (!raw) return JSON.parse(JSON.stringify(EMPTY));
       const p = JSON.parse(raw);
-      return {
-        q: p.q && typeof p.q === 'object' ? p.q : {},
-        s: p.s && typeof p.s === 'object' ? p.s : {},
-        c: p.c && typeof p.c === 'object' ? p.c : {}
-      };
+      /* старые правки могут содержать удалённые разделы — их просто пропускаем */
+      const out = blank();
+      KIND_KEYS.forEach((k) => {
+        if (p[k] && typeof p[k] === 'object') out[k] = p[k];
+      });
+      return out;
     } catch (e) {
-      return JSON.parse(JSON.stringify(EMPTY));
+      return blank();
     }
   }
 
@@ -42,20 +52,16 @@
     return null;
   }
 
-  const KINDS = { q: 'QUESTIONS', s: 'SPECIES', c: 'CARDS' };
-
   const Content = {
     /* --- чтение --- */
     questions() { return merge(global.DATA.QUESTIONS, ov.q); },
     species() { return merge(global.DATA.SPECIES, ov.s); },
-    cards() { return merge(global.DATA.CARDS, ov.c); },
     topics() { return global.DATA.TOPICS; },
     sets() { return global.DATA.SETS; },
     topicById(id) { return global.DATA.topicById(id); },
 
     question(id) { return find(this.questions(), id); },
     spec(id) { return find(this.species(), id); },
-    card(id) { return find(this.cards(), id); },
 
     /* --- правки --- */
     set(kind, id, patch) {
@@ -86,7 +92,7 @@
     },
 
     changedCount() {
-      return ['q', 's', 'c'].reduce((n, k) => n + Object.keys(ov[k]).length, 0);
+      return KIND_KEYS.reduce((n, k) => n + Object.keys(ov[k]).length, 0);
     },
 
     resetAll() { ov = JSON.parse(JSON.stringify(EMPTY)); save(); },
@@ -97,8 +103,8 @@
     importJSON(text) {
       const p = JSON.parse(text);
       if (!p || typeof p !== 'object') throw new Error('Это не похоже на файл правок');
-      const next = { q: {}, s: {}, c: {} };
-      ['q', 's', 'c'].forEach((k) => {
+      const next = blank();
+      KIND_KEYS.forEach((k) => {
         const src = p[k] || {};
         Object.keys(src).forEach((id) => {
           const base = find(global.DATA[KINDS[k]], id);
