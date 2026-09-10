@@ -284,7 +284,9 @@
       <div class="rows">
         ${list.map((sp) => `
           <button class="row" data-sp="${esc(sp.id)}" data-sfx="click">
-            <span class="pic" aria-hidden="true">${sp.emoji}</span>
+            ${sp.img
+              ? `<img class="thumb" src="assets/img/${esc(sp.img)}" alt="" loading="lazy">`
+              : `<span class="pic" aria-hidden="true">${sp.emoji}</span>`}
             <span>${esc(sp.name)}</span>
             <span class="go" aria-hidden="true">→</span>
           </button>`).join('')}
@@ -309,6 +311,7 @@
     const nextSp = i >= 0 && i < list.length - 1 ? list[i + 1] : null;
 
     view.innerHTML = `
+      ${sp.img ? `<img class="photo" src="assets/img/${esc(sp.img)}" alt="${esc(sp.name)}" loading="lazy">` : ''}
       <h1 class="title">${esc(sp.name)}</h1>
       <p class="tagline">${esc(sp.status)}</p>
       <ul class="facts">${sp.facts.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
@@ -545,7 +548,9 @@
       body = `
         <div class="field"><label>Название</label><input type="text" data-field="name" value="${esc(it.name)}"></div>
         <div class="field"><label>Подпись</label><input type="text" data-field="status" value="${esc(it.status)}"></div>
-        <div class="field"><label>Эмодзи</label><input type="text" data-field="emoji" value="${esc(it.emoji)}"></div>
+        <div class="field"><label>Эмодзи (показывается, если картинки нет)</label><input type="text" data-field="emoji" value="${esc(it.emoji)}"></div>
+        <div class="field"><label>Файл картинки в папке assets/img (например, s07-volk.jpg)</label>
+          <input type="text" data-field="img" value="${esc(it.img || '')}"></div>
         <div class="field"><label>Что рассказать (каждая строка — отдельный пункт)</label>
           <textarea rows="4" data-field="factsText">${esc(it.facts.join('\n'))}</textarea></div>`;
     } else {
@@ -591,7 +596,10 @@
       const facts = val('factsText').split('\n').map((x) => x.trim()).filter(Boolean);
       if (!name) return fail('Название не может быть пустым');
       if (!facts.length) return fail('Нужен хотя бы один пункт рассказа');
-      Content.set('s', id, { name, status: val('status') || 'Обычный вид', emoji: val('emoji') || '🌿', facts });
+      const patch = { name, status: val('status') || 'Обычный вид', emoji: val('emoji') || '🌿', facts };
+      const img = val('img');
+      if (img) patch.img = img;
+      Content.set('s', id, patch);
     } else {
       const term = val('term');
       const def = val('def');

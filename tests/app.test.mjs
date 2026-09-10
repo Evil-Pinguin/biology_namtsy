@@ -58,17 +58,39 @@ await test('правильный ответ не стоит всегда на о
   }
 });
 
-await test('вопросы урока 1 опираются на проверенные факты', () => {
+await test('урок 1: 10 вопросов по темам плана урока', () => {
   const rodina = D.QUESTIONS.filter((q) => q.set === 'rodina');
-  const all = rodina.map((q) => q.text + ' ' + q.options.join(' ') + ' ' + q.explain).join(' ');
-  assert.ok(all.includes('84'), 'нет расстояния Намцы — Якутск (84 км)');
-  assert.ok(all.includes('Намцы'), 'нет села Намцы');
-  assert.ok(all.includes('Лена'), 'нет реки Лены');
-  assert.ok(all.includes('3 083 523'), 'нет площади Якутии');
-  assert.ok(all.includes('8 тысяч'), 'нет расстояния до Москвы');
-  assert.ok(all.includes('Энсиэли'), 'нет долины Энсиэли');
-  assert.ok(all.includes('календарь погоды') || all.includes('Календарь погоды'), 'нет календаря погоды');
-  assert.ok(all.includes('мал') && all.includes('больш'), 'нет понятий малой и большой родины');
+  assert.equal(rodina.length, 10);
+  const topics = Array.from(new Set(rodina.map((q) => D.topicById(q.topic).title)));
+  assert.equal(topics.length, 5, 'тем урока: ' + topics.join(', '));
+  for (const t of ['Малая и большая родина', 'Село Намцы', 'Расстояния', 'Река Лена', 'Ведение календаря погоды']) {
+    assert.ok(topics.includes(t), 'нет темы «' + t + '»');
+  }
+});
+
+await test('тексты и подсказки урока 1 совпадают с заданием учителя', () => {
+  const r = (id) => D.QUESTIONS.find((q) => q.id === id);
+  assert.equal(r('r01').text, 'Что обычно называют «малой родиной»?');
+  assert.equal(r('r01').options[1], 'Место, где ты родился, где живут твои близкие и которое тебе дорого с детства');
+  assert.equal(r('r01').answer, 1);
+  assert.equal(r('r02').text, 'Как связаны между собой понятия «малая родина» и «большая родина» (наша страна — Россия)?');
+  assert.equal(r('r03').options[0], 'Село Намцы');
+  assert.equal(r('r05').options[1], 'Около 80–90 километров');
+  assert.ok(r('r05').explain.includes('84'), 'в объяснении нет точных 84 км');
+  assert.equal(r('r07').options[3], 'Река Лена');
+  assert.equal(r('r09').text, 'Для чего школьникам на уроках окружающего мира или краеведения полезно вести календарь погоды?');
+  assert.equal(r('r10').options[0], 'Температура воздуха, облачность, осадки и сила и направление ветра');
+  D.QUESTIONS.filter((q) => q.set === 'rodina').forEach((q) => {
+    assert.ok(q.hint.length > 15, `${q.id}: нет подсказки`);
+    assert.ok(q.explain.length > 20, `${q.id}: нет объяснения`);
+  });
+});
+
+await test('у готовых видов есть файлы картинок, у остальных — эмодзи', () => {
+  const withImg = D.SPECIES.filter((x) => x.img);
+  assert.ok(withImg.length >= 7, 'картинок меньше семи: ' + withImg.length);
+  withImg.forEach((x) => assert.ok(fs.existsSync(path.join(ROOT, 'assets/img', x.img)), `нет файла ${x.img}`));
+  D.SPECIES.forEach((x) => assert.ok(x.emoji, `${x.id}: нет эмодзи-запасного варианта`));
 });
 
 await test('карточки и виды на месте, id уникальны', () => {
@@ -257,6 +279,13 @@ await test('знакомство: список из 22 карточек, фил�
   assert.equal($$('.row').length, flora);
   click($('[data-tab="all"]'));
   const horek = win.DATA.SPECIES.find((s) => s.name.includes('хорь'));
+  const withImg = win.DATA.SPECIES.find((x) => x.img);
+  click($(`.row[data-sp="${withImg.id}"]`));
+  assert.ok($('.photo'), 'в рассказе не показалась картинка вида');
+  assert.equal($('.photo').getAttribute('src'), 'assets/img/' + withImg.img);
+  assert.ok($('.photo').getAttribute('alt').length > 3, 'у картинки нет подписи для чтения с экрана');
+  click($('#toList'));
+  assert.ok($('.thumb'), 'в списке нет маленьких картинок');
   click($(`.row[data-sp="${horek.id}"]`));
   assert.ok($('.facts'), 'не открылся рассказ');
   assert.ok($('h1.title').textContent.includes('хор'));

@@ -209,6 +209,15 @@ h2.q { font-size: 22px; font-weight: 600; line-height: 1.4; margin-top: 24px; }
 }
 .row:hover { border-color: var(--accent-line); }
 .row .pic { font-size: 22px; flex: 0 0 26px; text-align: center; }
+.row .thumb {
+  flex: 0 0 46px; width: 46px; height: 46px; border-radius: 8px;
+  object-fit: cover; background: #eef1f4;
+}
+.photo {
+  display: block; width: 100%; max-height: 320px; object-fit: cover;
+  border: 2px solid var(--border); border-radius: var(--r);
+  margin-top: 14px; background: #eef1f4;
+}
 .row .go { margin-left: auto; color: var(--text-2); }
 
 /* ---------- рассказ о виде ---------- */
